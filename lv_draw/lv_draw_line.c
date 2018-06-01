@@ -249,9 +249,11 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 		line_draw_t pattern_line;
 		lv_point_t p0 = {0,0};
 		line_init(&pattern_line, &p0, &vect_norm);
+
 		for(i = 0; i < width; i ++) {
 			pattern[i].x = pattern_line.p_act.x;
 			pattern[i].y = pattern_line.p_act.y;
+
 			line_next(&pattern_line);
 		}
 	} else {
@@ -259,14 +261,42 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 		pattern[0].y = 0;
 	}
 
+#if LV_ANTIALIAS
+	lv_coord_t aa_last_corner;
+	aa_last_corner = 0;
+#endif
+
 	/* Make the coordinates relative to the center */
 	for(i = 0; i < width; i++) {
 		pattern[i].x -= pattern[width - 1].x / 2;
 		pattern[i].y -= pattern[width - 1].y / 2;
+#if LV_ANTIALIAS
+		if(i != 0) {
+			if(main_line->hor) {
+				if(pattern[i - 1].x != pattern[i].x) {
+					line_ver_aa(main_line->p1.x + pattern[aa_last_corner].x - 1, main_line->p1.y + pattern[aa_last_corner].y,
+							    pattern[i].y - pattern[aa_last_corner].y, mask, LV_COLOR_RED, LV_OPA_50);
+					aa_last_corner = i;
+				}
+			}
+
+		}
+#endif
 	}
 
-#if LV_ANTIALIAS
 
+#if LV_ANTIALIAS
+	/*Add the last part of anti-aliasing for the perpendicular ending*/
+	if(main_line->hor) {
+					if(pattern[i - 1].x != pattern[i].x) {
+						line_ver_aa(main_line->p1.x + pattern[aa_last_corner].x - 1, main_line->p1.y + pattern[aa_last_corner].y,
+								    pattern[i].y - pattern[aa_last_corner].y, mask, LV_COLOR_RED, LV_OPA_50);
+						aa_last_corner = i;
+					}
+				}
+#endif
+
+#if LV_ANTIALIAS
 
 	/*With with value shift the anti aliasing on the edges (-1, 1 or 0 (zero only in case width == 0))*/
 	lv_coord_t aa_shift1;
@@ -282,6 +312,8 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 	lv_area_t draw_area;
 	bool first_run = true;
 
+	lv_color_t lc;
+	lc.full = 0x12334;
 	if(main_line->hor) {
 		while(line_next_y(main_line)) {
 			for(i = 0; i < width; i++) {
@@ -289,20 +321,32 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 				draw_area.y1 = prev_p.y - pattern[i].y;
 				draw_area.x2 = draw_area.x1 + main_line->p_act.x - prev_p.x - 1;
 				draw_area.y2 = draw_area.y1;
-				fill_fp(&draw_area, mask, style->line.color, style->line.opa);
+				fill_fp(&draw_area, mask, lc, style->line.opa);
 
 				/* Fill the gaps
 				 * When stepping in y one pixel remains empty on every corner (don't do this on the first segment ) */
 				if(i != 0 && pattern[i].x != pattern[i - 1].x && !first_run) {
-					px_fp(draw_area.x1 - 1 , draw_area.y1, mask, style->line.color, style->line.opa);
+					px_fp(draw_area.x1 - 1 , draw_area.y1, mask, LV_COLOR_BLACK, style->line.opa);
 				}
 			}
 
+//			lc.full += 0x4568;
+
 #if LV_ANTIALIAS
-			line_hor_aa(prev_p.x - pattern[0].x, prev_p.y - pattern[0].y + aa_shift1,
-					    main_line->p_act.x - prev_p.x, mask, style->line.color, style->line.opa);
-			line_hor_aa(prev_p.x - pattern[width_safe - 1].x, prev_p.y - pattern[width_safe - 1].y - aa_shift2,
-					    -(main_line->p_act.x - prev_p.x), mask, style->line.color, style->line.opa);
+			draw_area.x1 = prev_p.x - pattern[0].x;
+			draw_area.y1 = prev_p.y - pattern[0].y;
+			draw_area.x2 = draw_area.x1 + main_line->p_act.x - prev_p.x - 1;
+			draw_area.y2 = draw_area.y1;
+			line_hor_aa(draw_area.x1, draw_area.y1 + 1,
+					    draw_area.x2 - draw_area.x1 + 1, mask, LV_COLOR_RED, style->line.opa);
+
+			draw_area.x1 = prev_p.x - pattern[width_safe - 1].x;
+			draw_area.y1 = prev_p.y - pattern[width_safe - 1].y;
+			draw_area.x2 = draw_area.x1 + main_line->p_act.x - prev_p.x - 1;
+			draw_area.y2 = draw_area.y1;
+
+			line_hor_aa(draw_area.x1, draw_area.y1,
+					    draw_area.x2 - draw_area.x1 + 1, mask, LV_COLOR_RED, style->line.opa);
 #endif
 
 			first_run = false;
