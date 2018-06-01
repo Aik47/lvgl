@@ -323,6 +323,7 @@ static lv_res_t lv_roller_signal(lv_obj_t * roller, lv_signal_t sign, void * par
             }
         } else if(c == LV_GROUP_KEY_ENTER || c == LV_GROUP_KEY_ENTER_LONG) {
             if(ext->ddlist.action) ext->ddlist.action(roller);
+            ext->ddlist.sel_opt_id_ori = ext->ddlist.sel_opt_id;		/*Set the entered value as default*/
         }
     }
     else if(sign == LV_SIGNAL_GET_TYPE) {
