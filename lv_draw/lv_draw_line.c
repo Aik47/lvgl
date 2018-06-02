@@ -89,9 +89,10 @@ void lv_draw_line(const lv_point_t * point1, const lv_point_t * point2, const lv
 
     /*If the line if rather vertical then be sure y1 < y2 else x1 < x2*/
 
-    if(LV_MATH_ABS(point1->x-point2->x) < LV_MATH_ABS(point1->y-point2->y)) {
-    	/*Steps less in x then y -> rather vertical*/
-    	if(point1->y < point2->y) {
+    if(LV_MATH_ABS(point1->x-point2->x) > LV_MATH_ABS(point1->y-point2->y)) {
+
+    	/*Steps less in y then x -> rather horizontal*/
+    	if(point1->x < point2->x) {
 			p1.x = point1->x;
 			p1.y = point1->y;
 			p2.x = point2->x;
@@ -103,8 +104,8 @@ void lv_draw_line(const lv_point_t * point1, const lv_point_t * point2, const lv
 			p2.y = point1->y;
 		}
     } else {
-    	/*Steps less in y then x -> rather horizontal*/
-    	if(point1->x < point2->x) {
+    	/*Steps less in x then y -> rather vertical*/
+		if(point1->y < point2->y) {
 			p1.x = point1->x;
 			p1.y = point1->y;
 			p2.x = point2->x;
@@ -190,7 +191,6 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 #if LV_ANTIALIAS
 	width--;
 	if(width == 0) width_safe = 1;
-	else width_safe = width;
 #endif
 
 
@@ -213,6 +213,7 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 		width = (width * width_corr_array[wcor]);
 		width = width >> LINE_WIDTH_CORR_SHIFT;
 	}
+	width_safe = width;
 
 	lv_point_t vect_main, vect_norm;
 	vect_main.x = main_line->p2.x - main_line->p1.x;
@@ -242,7 +243,7 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 #else
 	lv_point_t pattern[LINE_MAX_WIDTH];
 #endif
-	int i = 0;;
+	int i = 0;
 
 	/*Create a perpendicular pattern (a small line)*/
 	if(width != 0) {
@@ -274,8 +275,38 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 		if(i != 0) {
 			if(main_line->hor) {
 				if(pattern[i - 1].x != pattern[i].x) {
-					line_ver_aa(main_line->p1.x + pattern[aa_last_corner].x - 1, main_line->p1.y + pattern[aa_last_corner].y,
-							    pattern[i].y - pattern[aa_last_corner].y, mask, LV_COLOR_RED, LV_OPA_50);
+					lv_coord_t seg_w = pattern[i].y - pattern[aa_last_corner].y;
+					if(main_line->sy < 0) {
+						line_ver_aa(main_line->p1.x + pattern[aa_last_corner].x - 1, main_line->p1.y + pattern[aa_last_corner].y + seg_w + 1,
+									seg_w, mask, LV_COLOR_RED, LV_OPA_50);
+
+						line_ver_aa(main_line->p2.x + pattern[aa_last_corner].x + 1, main_line->p2.y + pattern[aa_last_corner].y + seg_w + 1,
+									-seg_w, mask, LV_COLOR_RED, LV_OPA_50);
+					} else {
+						line_ver_aa(main_line->p1.x + pattern[aa_last_corner].x - 1, main_line->p1.y + pattern[aa_last_corner].y,
+									seg_w, mask, LV_COLOR_RED, LV_OPA_50);
+
+						line_ver_aa(main_line->p2.x + pattern[aa_last_corner].x + 1, main_line->p2.y + pattern[aa_last_corner].y,
+									-seg_w, mask, LV_COLOR_RED, LV_OPA_50);
+					}
+					aa_last_corner = i;
+				}
+			} else {
+				if(pattern[i - 1].y != pattern[i].y) {
+					lv_coord_t seg_w = pattern[i].x - pattern[aa_last_corner].x;
+					if(main_line->sx < 0) {
+						line_hor_aa(main_line->p1.x + pattern[aa_last_corner].x + seg_w + 1, main_line->p1.y + pattern[aa_last_corner].y - 1,
+									seg_w, mask, LV_COLOR_RED, LV_OPA_50);
+
+						line_hor_aa(main_line->p2.x + pattern[aa_last_corner].x + seg_w + 1, main_line->p2.y + pattern[aa_last_corner].y + 1,
+									-seg_w, mask, LV_COLOR_RED, LV_OPA_50);
+					} else {
+						line_hor_aa(main_line->p1.x + pattern[aa_last_corner].x, main_line->p1.y + pattern[aa_last_corner].y - 1,
+									seg_w, mask, LV_COLOR_RED, LV_OPA_50);
+
+						line_hor_aa(main_line->p2.x + pattern[aa_last_corner].x, main_line->p2.y + pattern[aa_last_corner].y + 1,
+									-seg_w, mask, LV_COLOR_RED, LV_OPA_50);
+					}
 					aa_last_corner = i;
 				}
 			}
@@ -288,12 +319,39 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 #if LV_ANTIALIAS
 	/*Add the last part of anti-aliasing for the perpendicular ending*/
 	if(main_line->hor) {
-					if(pattern[i - 1].x != pattern[i].x) {
-						line_ver_aa(main_line->p1.x + pattern[aa_last_corner].x - 1, main_line->p1.y + pattern[aa_last_corner].y,
-								    pattern[i].y - pattern[aa_last_corner].y, mask, LV_COLOR_RED, LV_OPA_50);
-						aa_last_corner = i;
-					}
-				}
+		lv_coord_t seg_w = pattern[width_safe - 1].y - pattern[aa_last_corner].y;
+		if(main_line->sy < 0) {
+			line_ver_aa(main_line->p1.x + pattern[aa_last_corner].x - 1, main_line->p1.y + pattern[aa_last_corner].y + seg_w,
+						seg_w + main_line->sy, mask, LV_COLOR_RED, LV_OPA_50);
+
+			line_ver_aa(main_line->p2.x + pattern[aa_last_corner].x + 1, main_line->p2.y + pattern[aa_last_corner].y + seg_w,
+						-(seg_w + main_line->sy), mask, LV_COLOR_RED, LV_OPA_50);
+
+		} else {
+			line_ver_aa(main_line->p1.x + pattern[aa_last_corner].x - 1, main_line->p1.y + pattern[aa_last_corner].y,
+						seg_w + main_line->sy, mask, LV_COLOR_RED, LV_OPA_50);
+
+			line_ver_aa(main_line->p2.x + pattern[aa_last_corner].x + 1, main_line->p2.y + pattern[aa_last_corner].y,
+						-(seg_w + main_line->sy), mask, LV_COLOR_RED, LV_OPA_50);
+		}
+	} else {
+		lv_coord_t seg_w = pattern[width_safe - 1].x - pattern[aa_last_corner].x;
+		if(main_line->sy < 0) {
+			line_hor_aa(main_line->p1.x + pattern[aa_last_corner].x + seg_w, main_line->p1.y + pattern[aa_last_corner].y - 1,
+						seg_w + main_line->sx, mask, LV_COLOR_RED, LV_OPA_50);
+
+			line_hor_aa(main_line->p2.x + pattern[aa_last_corner].x + seg_w, main_line->p2.y + pattern[aa_last_corner].y + 1,
+						-(seg_w + main_line->sx), mask, LV_COLOR_RED, LV_OPA_50);
+
+		} else {
+			line_hor_aa(main_line->p1.x + pattern[aa_last_corner].x, main_line->p1.y + pattern[aa_last_corner].y - 1,
+						seg_w + main_line->sx, mask, LV_COLOR_RED, LV_OPA_50);
+
+			line_hor_aa(main_line->p2.x + pattern[aa_last_corner].x , main_line->p2.y + pattern[aa_last_corner].y + 1,
+						-(seg_w + main_line->sx), mask, LV_COLOR_RED, LV_OPA_50);
+		}
+
+	}
 #endif
 
 #if LV_ANTIALIAS
@@ -312,41 +370,27 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 	lv_area_t draw_area;
 	bool first_run = true;
 
-	lv_color_t lc;
-	lc.full = 0x12334;
 	if(main_line->hor) {
 		while(line_next_y(main_line)) {
 			for(i = 0; i < width; i++) {
-				draw_area.x1 = prev_p.x - pattern[i].x;
-				draw_area.y1 = prev_p.y - pattern[i].y;
+				draw_area.x1 = prev_p.x + pattern[i].x;
+				draw_area.y1 = prev_p.y + pattern[i].y;
 				draw_area.x2 = draw_area.x1 + main_line->p_act.x - prev_p.x - 1;
 				draw_area.y2 = draw_area.y1;
-				fill_fp(&draw_area, mask, lc, style->line.opa);
+				fill_fp(&draw_area, mask, style->line.color, style->line.opa);
 
 				/* Fill the gaps
 				 * When stepping in y one pixel remains empty on every corner (don't do this on the first segment ) */
 				if(i != 0 && pattern[i].x != pattern[i - 1].x && !first_run) {
-					px_fp(draw_area.x1 - 1 , draw_area.y1, mask, LV_COLOR_BLACK, style->line.opa);
+					px_fp(draw_area.x1 , draw_area.y1 - main_line->sy, mask, style->line.color, style->line.opa);
 				}
 			}
 
-//			lc.full += 0x4568;
-
 #if LV_ANTIALIAS
-			draw_area.x1 = prev_p.x - pattern[0].x;
-			draw_area.y1 = prev_p.y - pattern[0].y;
-			draw_area.x2 = draw_area.x1 + main_line->p_act.x - prev_p.x - 1;
-			draw_area.y2 = draw_area.y1;
-			line_hor_aa(draw_area.x1, draw_area.y1 + 1,
-					    draw_area.x2 - draw_area.x1 + 1, mask, LV_COLOR_RED, style->line.opa);
-
-			draw_area.x1 = prev_p.x - pattern[width_safe - 1].x;
-			draw_area.y1 = prev_p.y - pattern[width_safe - 1].y;
-			draw_area.x2 = draw_area.x1 + main_line->p_act.x - prev_p.x - 1;
-			draw_area.y2 = draw_area.y1;
-
-			line_hor_aa(draw_area.x1, draw_area.y1,
-					    draw_area.x2 - draw_area.x1 + 1, mask, LV_COLOR_RED, style->line.opa);
+			line_hor_aa(prev_p.x + pattern[0].x, prev_p.y + pattern[0].y - aa_shift1,
+					    -(main_line->p_act.x - prev_p.x), mask, style->line.color, style->line.opa);
+			line_hor_aa(prev_p.x + pattern[width_safe - 1].x, prev_p.y + pattern[width_safe - 1].y + aa_shift2,
+					    main_line->p_act.x - prev_p.x, mask, style->line.color, style->line.opa);
 #endif
 
 			first_run = false;
@@ -356,8 +400,8 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 		}
 
 		for(i = 0; i < width; i++) {
-			draw_area.x1 = prev_p.x - pattern[i].x;
-			draw_area.y1 = prev_p.y - pattern[i].y;
+			draw_area.x1 = prev_p.x + pattern[i].x;
+			draw_area.y1 = prev_p.y + pattern[i].y;
 			draw_area.x2 = draw_area.x1 + main_line->p_act.x - prev_p.x;
 			draw_area.y2 = draw_area.y1;
 			fill_fp(&draw_area, mask, style->line.color , style->line.opa);
@@ -365,23 +409,23 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 			/* Fill the gaps
 			 * When stepping in y one pixel remains empty on every corner */
 			if(i != 0 && pattern[i].x != pattern[i - 1].x && !first_run) {
-				px_fp(draw_area.x1 - 1 , draw_area.y1, mask, style->line.color, style->line.opa);
+				px_fp(draw_area.x1, draw_area.y1 - main_line->sy, mask, style->line.color, style->line.opa);
 			}
 		}
 
 #if LV_ANTIALIAS
-			line_hor_aa(prev_p.x - pattern[0].x, prev_p.y - pattern[0].y + aa_shift1,
-					    main_line->p_act.x - prev_p.x + 1, mask, style->line.color, style->line.opa);
-			line_hor_aa(prev_p.x - pattern[width_safe - 1].x, prev_p.y - pattern[width_safe - 1].y - aa_shift2,
+			line_hor_aa(prev_p.x + pattern[0].x, prev_p.y + pattern[0].y - aa_shift1,
 					    -(main_line->p_act.x - prev_p.x + 1), mask, style->line.color, style->line.opa);
+			line_hor_aa(prev_p.x + pattern[width_safe - 1].x, prev_p.y + pattern[width_safe - 1].y + aa_shift2,
+					    main_line->p_act.x - prev_p.x + 1, mask, style->line.color, style->line.opa);
 #endif
 	}
 	/*Rather a vertical line*/
 	else {
 		while(line_next_x(main_line)) {
 			for(i = 0; i < width; i++) {
-				draw_area.x1 = prev_p.x - pattern[i].x;
-				draw_area.y1 = prev_p.y - pattern[i].y;
+				draw_area.x1 = prev_p.x + pattern[i].x;
+				draw_area.y1 = prev_p.y + pattern[i].y;
 				draw_area.x2 = draw_area.x1;
 				draw_area.y2 = draw_area.y1 + main_line->p_act.y - prev_p.y - 1;
 
@@ -390,15 +434,15 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 				/* Fill the gaps
 				 * When stepping in x one pixel remains empty on every corner (don't do this on the first segment ) */
 				if(i != 0 && pattern[i].y != pattern[i - 1].y && !first_run) {
-					px_fp(draw_area.x1 , draw_area.y1 - 1, mask, style->line.color, style->line.opa);
+					px_fp(draw_area.x1 - main_line->sx, draw_area.y1, mask, style->line.color, style->line.opa);
 				}
 			}
 
 #if LV_ANTIALIAS
-			line_ver_aa(prev_p.x - pattern[0].x + aa_shift1, prev_p.y - pattern[0].y,
-					    main_line->p_act.y - prev_p.y, mask, style->line.color, style->line.opa);
-			line_ver_aa(prev_p.x - pattern[width_safe - 1].x - aa_shift2, prev_p.y - pattern[width_safe - 1].y,
+			line_ver_aa(prev_p.x + pattern[0].x - aa_shift1, prev_p.y + pattern[0].y,
 					    -(main_line->p_act.y - prev_p.y), mask, style->line.color, style->line.opa);
+			line_ver_aa(prev_p.x + pattern[width_safe - 1].x + aa_shift2, prev_p.y + pattern[width_safe - 1].y,
+					    main_line->p_act.y - prev_p.y, mask, style->line.color, style->line.opa);
 #endif
 
 			first_run = false;
@@ -409,8 +453,8 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 
 		/*Draw the last part*/
 		for(i = 0; i < width; i++) {
-			draw_area.x1 = prev_p.x - pattern[i].x;
-			draw_area.y1 = prev_p.y - pattern[i].y;
+			draw_area.x1 = prev_p.x + pattern[i].x;
+			draw_area.y1 = prev_p.y + pattern[i].y;
 			draw_area.x2 = draw_area.x1;
 			draw_area.y2 = draw_area.y1 + main_line->p_act.y - prev_p.y;
 
@@ -419,15 +463,15 @@ static void line_draw_skew(line_draw_t * main_line, const lv_area_t * mask, cons
 			/* Fill the gaps
 			 * When stepping in x one pixel remains empty on every corner */
 			if(i != 0 && pattern[i].y != pattern[i - 1].y && !first_run) {
-				px_fp(draw_area.x1 , draw_area.y1 - 1, mask, style->line.color, style->line.opa);
+				px_fp(draw_area.x1 - main_line->sx, draw_area.y1, mask, style->line.color, style->line.opa);
 			}
 		}
 
 #if LV_ANTIALIAS
-		line_ver_aa(prev_p.x - pattern[0].x + aa_shift1, prev_p.y - pattern[0].y,
-					main_line->p_act.y - prev_p.y + 1, mask, style->line.color, style->line.opa);
-		line_ver_aa(prev_p.x - pattern[width_safe - 1].x - aa_shift2, prev_p.y - pattern[width_safe - 1].y,
+		line_ver_aa(prev_p.x + pattern[0].x - aa_shift1, prev_p.y + pattern[0].y,
 					-(main_line->p_act.y - prev_p.y + 1), mask, style->line.color, style->line.opa);
+		line_ver_aa(prev_p.x + pattern[width_safe - 1].x + aa_shift2, prev_p.y + pattern[width_safe - 1].y,
+					main_line->p_act.y - prev_p.y + 1, mask, style->line.color, style->line.opa);
 #endif
 	}
 }
